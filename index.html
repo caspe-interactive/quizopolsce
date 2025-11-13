@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>QuizProPL — Sprawdź wiedzę o Polsce</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#051028">
+<style>
+:root{
+  --bg1:#071025;
+  --card:#0b1220;
+  --text:#e6f7ff;
+  --muted:#9fb6d6;
+  --neon1:#00f0ff;
+  --neon2:#ff3fc4;
+  --good:#16d36a;
+  --bad:#ff5c6c;
+  --accent:#ffd27a;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Roboto,Arial}
+body{
+  background:linear-gradient(180deg,var(--bg1),#051028 80%);
+  color:var(--text);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+}
+.page{width:100%;max-width:920px}
+.ad-top,.ad-bottom{
+  background:#000;color:white;display:flex;align-items:center;justify-content:center;margin-bottom:12px;
+  border-radius:12px; padding:10px; text-align:center;
+}
+.card{
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius:var(--radius);
+  padding:22px;
+  box-shadow:0 10px 40px rgba(0,0,0,0.6);
+  border:1px solid rgba(0,255,255,0.04);
+}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.title{font-weight:800;color:var(--neon1);letter-spacing:0.6px}
+.score{display:none;color:var(--accent)}
+.question{font-size:1.4rem;text-align:center;margin:8px 0 14px;color:var(--text)}
+.answers{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){ .answers{grid-template-columns:1fr} .question{font-size:1.08rem} }
+
+.btn{
+  display:flex;align-items:center;justify-content:center;padding:12px;border-radius:12px;cursor:pointer;
+  user-select:none;font-weight:800;color:white;font-size:0.98rem;min-height:52px;
+  transition:transform .12s ease, box-shadow .12s ease, opacity .12s;
+  background:linear-gradient(90deg,var(--neon1),var(--neon2));
+  box-shadow:0 10px 40px rgba(0,240,255,0.04), 0 0 20px rgba(255,63,196,0.02);
+  border:1px solid rgba(255,255,255,0.02);
+}
+.btn:active{transform:translateY(2px)}
+.btn:hover{transform:translateY(-4px); box-shadow:0 18px 60px rgba(0,240,255,0.06);}
+.btn.good{ background: linear-gradient(90deg,var(--good),#8df3b0); box-shadow:0 10px 40px rgba(22,211,106,0.06);}
+.btn.bad{ background: linear-gradient(90deg,var(--bad),#ff8a94); box-shadow:0 10px 40px rgba(255,92,108,0.06);}
+
+.meta{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:var(--muted);font-size:0.95rem}
+.small-muted{color:var(--muted);font-size:0.95rem;margin-top:8px}
+
+/* final overlay */
+#final{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(3,6,10,0.85),rgba(2,3,8,0.9));z-index:1200}
+#final-card{
+  background:linear-gradient(180deg,#081322,#06121f);
+  padding:30px;
+  border-radius:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.7);
+  text-align:center;color:var(--text);
+  max-width:580px;width:94%;
+}
+#final-text { font-size:2.2rem; font-weight:800; color: var(--accent); margin:16px 0; }
+
+.final-actions{display:flex;flex-direction:column;gap:10px;align-items:stretch;margin-top:10px}
+.final-actions .btn{font-size:1rem;padding:12px 14px}
+
+/* install hint (PWA) */
+.install-hint { display:none; margin-top:8px; font-size:0.95rem; color:var(--muted); text-align:center; }
+
+/* messages */
+.msg{
+  position:fixed; right:16px; bottom:16px; z-index:1300;
+  background:rgba(0,0,0,0.7); padding:10px 14px; border-radius:10px; color:#fff; font-size:0.95rem;
+  box-shadow:0 8px 30px rgba(0,0,0,0.6);
+  display:none;
+}
+
+/* nick input */
+#nickWrap{display:flex;gap:8px;align-items:center}
+#nick{padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:var(--text);min-width:260px;font-weight:700;font-size:1.1rem}
+
+/* canvas */
+canvas{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:1100}
+
+/* video ad container */
+#videoAd{
+  display:none;
+  width:100%;height:180px;background:#000;color:white;display:flex;align-items:center;justify-content:center;margin:12px 0;border-radius:12px;
+}
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+
+<div class="page">
+  <div class="ad-top" id="adTop">Górna reklama wideo Monetag</div>
+
+  <div class="card" id="quizCard">
+    <div class="top">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="title">QuizProPL — Sprawdź wiedzę o Polsce</div>
+        <div id="nickWrap">
+          <input id="nick" placeholder="Jarkos" aria-label="Nick gracza" />
+        </div>
+      </div>
+      <div class="score">Punkty: <span id="points">0</span></div>
+    </div>
+
+    <div id="question" class="question">Ładowanie...</div>
+    <div id="answers" class="answers"></div>
+    <div id="videoAd">Reklama wideo</div>
+
+    <div class="meta">
+      <div id="progress">Pytanie 0/0</div>
+      <div class="small-muted">Miejsca reklamowe gotowe</div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+  <div class="ad-bottom" id="adBottom">Dolna reklama wideo Monetag</div>
+</div>
+
+<div id="final" aria-hidden="true">
+  <div id="final-card">
+    <h1 style="margin:6px 0 8px; color:var(--neon2)">Twój wynik</h1>
+    <div id="final-text">0 pkt</div>
+
+    <div class="final-actions" style="margin-top:14px;">
+      <div class="btn big" id="retryBtn" style="background:linear-gradient(90deg,#16d36a,#8df3b0)">Zagraj ponownie/Popraw wynik</div>
+      <div class="btn big" id="shareBtn" style="background:linear-gradient(90deg,#00f0ff,#ff3fc4)">Poleć quiz znajomemu</div>
+      <div class="btn big" id="saveBtn" style="background:linear-gradient(90deg,#ffd27a,#ff9f43); color:#081322;">📲 Zapisz na ekranie głównym</div>
+      <div class="btn big" id="endBtn" style="background:linear-gradient(90deg,#ff5c6c,#ff8a94)">Koniec</div>
+      <div class="install-hint" id="installHint">Aby zainstalować: kliknij „Zapisz na ekranie głównym”</div>
+    </div>
+
+    <div class="small-muted" style="margin-top:8px">Dziękujemy za grę — wróć jutro i pobij swój wynik!</div>
+  </div>
+</div>
+
+<div class="msg" id="msgBox"></div>
+
+<audio id="bg" loop src="sounds/background.mp3"></audio>
+<audio id="snd-ding" src="sounds/ding.mp3"></audio>
+<audio id="snd-buzzer" src="sounds/buzzer.mp3"></audio>
+<audio id="snd-fanfare" src="sounds/fanfare.mp3"></audio>
+
+<script>
+// Helper
+const $ = id => document.getElementById(id);
+const questionEl = $('question'), answersEl = $('answers'), pointsEl = $('points'),
+      progressEl = $('progress'), finalEl = $('final'), finalText = $('final-text'),
+      videoAd = $('videoAd'), adTop = $('adTop'), adBottom = $('adBottom');
+const nickEl = $('nick');
+const bg = $('bg');
+
+let points=0, current=0, deferredPrompt=null;
+
+// Start bg music
+document.body.addEventListener('click', () => { if(bg.paused) bg.play().catch(()=>{}); }, { once: true });
+
+// Service Worker Monetag
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
+
+// Install PWA
+const saveBtn = $('saveBtn');
+const installHint = $('installHint');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  saveBtn.style.display = 'block';
+  installHint.style.display = 'block';
+});
+if (/iphone|ipad|ipod/i.test(navigator.userAgent)) installHint.style.display='block';
+
+// Quiz questions
+const QUESTIONS = [
+  { q: "Stolica Polski?", a: ["Warszawa","Kraków","Gdańsk","Wrocław"], correct: 0 },
+  { q: "Największy polski port morski?", a: ["Gdańsk","Gdynia","Szczecin","Świnoujście"], correct: 0 },
+  { q: "Największe miasto na południu Polski?", a: ["Kraków","Wrocław","Katowice","Łódź"], correct: 0 },
+  { q: "Polska jest członkiem NATO od?", a: ["1999","2004","1990","2001"], correct: 0 },
+  { q: "Polski skoczek narciarski z wieloma medalami olimpijskimi?", a: ["Adam Małysz","Kamil Stoch","Piotr Żyła","Andrzej Stękała"], correct: 0 },
+  { q: "Największe miasto woj. mazowieckiego?", a: ["Warszawa","Radom","Płock","Siedlce"], correct: 0 },
+  { q: "Najważniejszy polski noblista w dziedzinie chemii?", a: ["Maria Skłodowska-Curie","Jan Czochralski","Michał Kalecki","Stefan Banach"], correct: 0 },
+  { q: "Najdłuższa rzeka w Polsce?", a: ["Wisła","Odra","Warta","Bug"], correct: 0 },
+  { q: "Najwyższy szczyt w Polsce?", a: ["Rysy","Śnieżka","Giewont","Babia Góra"], correct: 0 },
+  { q: "W którym roku Polska odzyskała niepodległość?", a: ["1918","1945","1914","1939"], correct: 0 },
+  { q: "Polski orzeł jest symbolem?", a: ["Godła","Flagi","Hymnu","Herbu miasta"], correct: 0 },
+  { q: "Największe miasto na Śląsku?", a: ["Katowice","Gliwice","Częstochowa","Bytom"], correct: 0 },
+  { q: "Polski hymn zaczyna się od słów?", a: ["Jeszcze Polska nie zginęła","Mazurka Dąbrowskiego","Bogurodzicy","Roty"], correct: 0 },
+  { q: "Polski król zwany „Lwem Lechistanu”?", a: ["Kazimierz Wielki","Bolesław Chrobry","Zygmunt Stary","Władysław Jagiełło"], correct: 0 },
+  { q: "Najdłuższa ulica w Warszawie?", a: ["Marszałkowska","Nowy Świat","Krakowskie Przedmieście","Aleje Jerozolimskie"], correct: 0 },
+  { q: "Symbol Polski na mapie świata?", a: ["Orzeł biały","Smok Wawelski","Syrenka","Mieszko I"], correct: 0 },
+  { q: "Największe jezioro w Polsce?", a: ["Śniardwy","Mamry","Hańcza","Dąbie"], correct: 0 },
+  { q: "Polski kompozytor, autor polonezów:", a: ["Fryderyk Chopin","Stanisław Moniuszko","Karol Szymanowski","Henryk Wieniawski"], correct: 0 },
+  { q: "Najwyższa góra w Tatrach Zachodnich?", a: ["Błyszcz","Łopata","Rysy","Świnica"], correct: 0 },
+  { q: "Polski piłkarz znany z kadry narodowej:", a: ["Robert Lewandowski","Grzegorz Krychowiak","Kamil Glik","Łukasz Piszczek"], correct: 0 },
+  { q: "Polska graniczy z ile państwami?", a: ["7","6","5","8"], correct: 0 },
+  { q: "Główny hymn Polski to:", a: ["Mazurek Dąbrowskiego","Bogurodzica","Roty","Gaude Mater Polonia"], correct: 0 },
+  { q: "Polska waluta?", a: ["Złoty","Euro","Dolar","Funt"], correct: 0 },
+  { q: "Największe miasto woj. małopolskiego?", a: ["Kraków","Tarnów","Nowy Sącz","Oświęcim"], correct: 0 },
+  { q: "Polski astronom, odkrywca planetoid:", a: ["Kopernik","Tadeusz Banachiewicz","Jan Heweliusz","Kazimierz Kordylewski"], correct: 0 },
+  { q: "Najważniejsza bitwa pod Warszawą w 1920 r.?", a: ["Cud nad Wisłą","Bitwa Warszawska","Bitwa pod Lenino","Bitwa pod Grunwaldem"], correct: 0 },
+  { q: "Polska największym producentem jabłek w Europie?", a: ["Tak","Nie","Częściowo","Nie wiadomo"], correct: 0 },
+  { q: "Polski władca koronowany w 1025 r.:", a: ["Bolesław Chrobry","Mieszko I","Kazimierz Wielki","Władysław Jagiełło"], correct: 0 },
+  { q: "Najdłuższy tunel w Polsce?", a: ["Tunel pod Świną","Tunel kolejowy w Świerku","Tunel pod Martwą Wisłą","Tunel w Międzyrzeczu"], correct: 0 },
+  { q: "Polska część Puszczy Białowieskiej:", a: ["Białowieża","Knyszyńska","Kampinoska","Augustowska"], correct: 0 },
+  { q: "Znany polski lekkoatleta:", a: ["Irena Szewińska","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Najstarsze miasto w Polsce:", a: ["Kalisz","Kraków","Gniezno","Poznań"], correct: 0 },
+  { q: "Polska granica morska wynosi:", a: ["440 km","300 km","600 km","520 km"], correct: 0 },
+  { q: "Znany polski wódz wojskowy:", a: ["Tadeusz Kościuszko","Jan III Sobieski","Józef Piłsudski","Kazimierz Pułaski"], correct: 0 },
+  { q: "Największe miasto woj. pomorskiego:", a: ["Gdańsk","Gdynia","Słupsk","Elbląg"], correct: 0 },
+  { q: "Polski noblista literacki:", a: ["Henryk Sienkiewicz","Maria Skłodowska-Curie","Czesław Miłosz","Wisława Szymborska"], correct: 0 },
+  { q: "Największe jezioro mazurskie:", a: ["Śniardwy","Mamry","Niegocin","Jagodne"], correct: 0 },
+  { q: "Znany polski reżyser filmowy:", a: ["Krzysztof Kieślowski","Andrzej Wajda","Roman Polański","Jerzy Hoffman"], correct: 0 },
+  { q: "Największe miasto woj. wielkopolskiego:", a: ["Poznań","Kalisz","Gniezno","Leszno"], correct: 0 },
+  { q: "Polski astronom słynny z obserwatorium w Gdańsku:", a: ["Jan Heweliusz","Kopernik","Tadeusz Banachiewicz","Kazimierz Kordylewski"], correct: 0 },
+  { q: "Najdłuższy most w Polsce:", a: ["Most Solidarności w Płocku","Most Gdański","Most Poniatowskiego","Most Łazienkowski"], correct: 0 },
+  { q: "Polski tenisista z tytułem ATP:", a: ["Hubert Hurkacz","Jerzy Janowicz","Łukasz Kubot","Mariusz Fyrstenberg"], correct: 0 },
+  { q: "Największe miasto woj. dolnośląskiego:", a: ["Wrocław","Legnica","Wałbrzych","Jelenia Góra"], correct: 0 },
+  { q: "Polska największe góry:", a: ["Tatry","Sudety","Bieszczady","Góry Świętokrzyskie"], correct: 0 },
+  { q: "Najstarsza uczelnia w Polsce:", a: ["Uniwersytet Jagielloński","Uniwersytet Warszawski","Politechnika Warszawska","Akademia Górniczo-Hutnicza"], correct: 0 },
+  { q: "Polski hokeista olimpijski:", a: ["Mariusz Czerkawski","Andrzej Zabawa","Adam Heinricha","Tomasz Valtonen"], correct: 0 },
+  { q: "Największe miasto woj. lubelskiego:", a: ["Lublin","Zamość","Chełm","Puławy"], correct: 0 },
+  { q: "Polski kompozytor operowy:", a: ["Stanisław Moniuszko","Fryderyk Chopin","Karol Szymanowski","Wojciech Kilar"], correct: 0 },
+  { q: "Najdłuższa rzeka w woj. wielkopolskim:", a: ["Warta","Noteć","Obra","Prosna"], correct: 0 },
+  { q: "Polski lekkoatleta mistrz olimpijski:", a: ["Irena Szewińska","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Największe miasto woj. śląskiego:", a: ["Katowice","Gliwice","Częstochowa","Bytom"], correct: 0 },
+  { q: "Polski żeglarz słynny z rejsów dookoła świata:", a: ["Krystyna Chojnowska-Liskiewicz","Henryk Jaskuła","Leonid Teliga","Karol Olgierd Borchardt"], correct: 0 },
+  { q: "Najwyższy szczyt Sudetów:", a: ["Śnieżka","Śnieżnik","Jagodna","Masyw Ślęży"], correct: 0 },
+  { q: "Polska drużyna zdobywająca medal na Mistrzostwach Świata w siatkówce mężczyzn w 2014:", a: ["Polska","Brazylia","Rosja","Włochy"], correct: 0 },
+  { q: "Polski noblista literacki:", a: ["Czesław Miłosz","Maria Skłodowska-Curie","Henryk Sienkiewicz","Wisława Szymborska"], correct: 0 },
+  { q: "Największe jezioro woj. warmińsko-mazurskiego:", a: ["Śniardwy","Mamry","Niegocin","Tałty"], correct: 0 },
+  { q: "Polski aktor znany z filmu 'Kiler':", a: ["Cezary Pazura","Robert Więckiewicz","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Największe miasto woj. zachodniopomorskiego:", a: ["Szczecin","Koszalin","Świnoujście","Kołobrzeg"], correct: 0 },
+  { q: "Polska drużyna piłkarska z największą liczbą mistrzostw kraju:", a: ["Legia Warszawa","Wisła Kraków","Lech Poznań","Górnik Zabrze"], correct: 0 },
+  { q: "Polski wynalazca, twórca ruchomego alfabetu do druku:", a: ["Jan Gutenberg","Kazimierz Prószyński","Ignacy Łukasiewicz","Michał Kalecki"], correct: 1 },
+  { q: "Największa wyspa Polski:", a: ["Wolin","Uznam","Żuławy","Kępa Wielka"], correct: 0 },
+  { q: "Polski sportowiec zdobywający złoty medal w skokach narciarskich na IO w 2018:", a: ["Kamil Stoch","Piotr Żyła","Maciej Kot","Dawid Kubacki"], correct: 0 },
+  { q: "Polska stolica była zniszczona podczas II wojny światowej:", a: ["Warszawa","Kraków","Gdańsk","Wrocław"], correct: 0 },
+  { q: "Polski noblista z dziedziny chemii:", a: ["Maria Skłodowska-Curie","Henryk Sienkiewicz","Czesław Miłosz","Lech Wałęsa"], correct: 0 },
+  { q: "Największe miasto woj. kujawsko-pomorskiego:", a: ["Bydgoszcz","Toruń","Włocławek","Grudziądz"], correct: 0 },
+  { q: "Polski kompozytor muzyki filmowej:", a: ["Wojciech Kilar","Fryderyk Chopin","Stanisław Moniuszko","Karol Szymanowski"], correct: 0 },
+  { q: "Najdłuższa rzeka woj. lubelskiego:", a: ["Bug","Wieprz","Bystrzyca","Krzna"], correct: 0 },
+  { q: "Polski wódz, bohater bitwy pod Wiedniem w 1683 r.:", a: ["Jan III Sobieski","Kazimierz Pułaski","Tadeusz Kościuszko","Bolesław Chrobry"], correct: 0 },
+  { q: "Największe miasto woj. podkarpackiego:", a: ["Rzeszów","Przemyśl","Tarnobrzeg","Stalowa Wola"], correct: 0 },
+  { q: "Polski reżyser filmowy, twórca 'Człowieka z marmuru':", a: ["Andrzej Wajda","Krzysztof Zanussi","Roman Polański","Krzysztof Kieślowski"], correct: 0 },
+  { q: "Polski noblista literacki, autor 'Ludzi bezdomnych':", a: ["Stefan Żeromski","Henryk Sienkiewicz","Czesław Miłosz","Wisława Szymborska"], correct: 0 },
+  { q: "Największe miasto woj. podlaskiego:", a: ["Białystok","Łomża","Suwałki","Hajnówka"], correct: 0 },
+  { q: "Polski sportowiec zdobywający złoto w lekkoatletyce:", a: ["Irena Szewińska","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Największe miasto woj. opolskiego:", a: ["Opole","Kędzierzyn-Koźle","Nysa","Brzeg"], correct: 0 },
+  { q: "Polski malarz, twórca 'Bitwy pod Grunwaldem':", a: ["Jan Matejko","Stanisław Wyspiański","Jacek Malczewski","Leon Wyczółkowski"], correct: 0 },
+  { q: "Polska granica lądowa z Niemcami wynosi około:", a: ["467 km","350 km","500 km","600 km"], correct: 0 },
+  { q: "Polski astronom słynny z heliocentryzmu:", a: ["Mikołaj Kopernik","Jan Heweliusz","Tadeusz Banachiewicz","Kazimierz Kordylewski"], correct: 0 },
+  { q: "Największe miasto woj. łódzkiego:", a: ["Łódź","Piotrków Trybunalski","Skierniewice","Pabianice"], correct: 0 },
+  { q: "Polska drużyna piłki ręcznej, medal olimpijski:", a: ["Polska","Francja","Chorwacja","Norwegia"], correct: 0 },
+  { q: "Największa wyspa na jeziorze Śniardwy:", a: ["Wyspa Pajęcza","Wyspa Wielka","Wyspa Młyńska","Wyspa Kormoran"], correct: 0 },
+  { q: "Polski noblista, działacz społeczny i polityczny:", a: ["Lech Wałęsa","Maria Skłodowska-Curie","Czesław Miłosz","Henryk Sienkiewicz"], correct: 0 },
+  { q: "Polski kompozytor operowy XIX w.:", a: ["Stanisław Moniuszko","Fryderyk Chopin","Karol Szymanowski","Wojciech Kilar"], correct: 0 },
+  { q: "Najwyższy szczyt Bieszczadów:", a: ["Tarnica","Halicz","Bukowe Berdo","Połonina Wetlińska"], correct: 0 },
+  { q: "Polski władca koronowany w 1333 r.:", a: ["Kazimierz Wielki","Władysław Jagiełło","Bolesław Chrobry","Mieszko I"], correct: 0 },
+  { q: "Polski reżyser, twórca 'Dekalogu':", a: ["Krzysztof Kieślowski","Andrzej Wajda","Roman Polański","Jerzy Hoffman"], correct: 0 },
+  { q: "Największe miasto woj. świętokrzyskiego:", a: ["Kielce","Skarżysko-Kamienna","Ostrowiec Świętokrzyski","Starachowice"], correct: 0 },
+  { q: "Polski aktor znany z 'Pitbulla':", a: ["Marcin Dorociński","Cezary Pazura","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Najdłuższa rzeka woj. zachodniopomorskiego:", a: ["Odra","Parsęta","Drawa","Rega"], correct: 0 },
+  { q: "Polska drużyna zdobywająca medal na Mistrzostwach Świata w piłce siatkowej kobiet:", a: ["Polska","Rosja","Brazylia","Włochy"], correct: 0 },
+  { q: "Największe miasto woj. śląskiego (poza Katowicami):", a: ["Częstochowa","Gliwice","Bytom","Zabrze"], correct: 0 },
+  { q: "Polski hokeista olimpijski:", a: ["Mariusz Czerkawski","Andrzej Zabawa","Adam Heinricha","Tomasz Valtonen"], correct: 0 },
+  { q: "Największe miasto woj. warmińsko-mazurskiego:", a: ["Olsztyn","Elbląg","Ełk","Iława"], correct: 0 },
+  { q: "Polski wynalazca lampy naftowej:", a: ["Ignacy Łukasiewicz","Maria Skłodowska-Curie","Jan Heweliusz","Michał Kalecki"], correct: 0 },
+  { q: "Najwyższa góra w Górach Świętokrzyskich:", a: ["Łysica","Łysa Góra","Kielce","Chełmowa Góra"], correct: 0 },
+  { q: "Polski lekkoatleta, rekordzista olimpijski:", a: ["Irena Szewińska","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Polski noblista literacki, autor 'Zniewolonego umysłu':", a: ["Czesław Miłosz","Maria Skłodowska-Curie","Henryk Sienkiewicz","Wisława Szymborska"], correct: 0 },
+  { q: "Największe miasto woj. pomorskiego (poza Gdańskiem):", a: ["Gdynia","Słupsk","Tczew","Wejherowo"], correct: 0 },
+  { q: "Polski kompozytor romantyczny:", a: ["Fryderyk Chopin","Stanisław Moniuszko","Karol Szymanowski","Wojciech Kilar"], correct: 0 },
+  { q: "Największe miasto woj. lubuskiego:", a: ["Zielona Góra","Gorzów Wielkopolski","Żary","Świebodzin"], correct: 0 },
+  { q: "Polski wódz, bohater powstania listopadowego:", a: ["Józef Chłopicki","Tadeusz Kościuszko","Jan III Sobieski","Kazimierz Pułaski"], correct: 0 },
+  { q: "Największe miasto woj. podlaskiego (poza Białymstokiem):", a: ["Łomża","Suwałki","Hajnówka","Augustów"], correct: 0 },
+  { q: "Najstarsze polskie miasto:", a: ["Kalisz","Gniezno","Poznań","Kraków"], correct: 0 },
+  { q: "Polski wynalazca telefonu bezprzewodowego:", a: ["Henryk Magnuski","Jan Szczepanik","Ignacy Łukasiewicz","Kazimierz Prószyński"], correct: 0 },
+  { q: "Polska stolica przed Warszawą:", a: ["Kraków","Gniezno","Poznań","Lublin"], correct: 0 },
+  { q: "Polski noblista, autor 'Na brzegu rzeki, której nie ma':", a: ["Czesław Miłosz","Wisława Szymborska","Henryk Sienkiewicz","Maria Skłodowska-Curie"], correct: 0 },
+  { q: "Najwyższy szczyt Gór Stołowych:", a: ["Szczeliniec Wielki","Radziejowa","Pilsko","Babia Góra"], correct: 0 },
+  { q: "Polski kompozytor muzyki filmowej, autor 'Draculi':", a: ["Wojciech Kilar","Fryderyk Chopin","Karol Szymanowski","Stanisław Moniuszko"], correct: 0 },
+  { q: "Największe miasto woj. małopolskiego (poza Krakowem):", a: ["Tarnów","Nowy Sącz","Olkusz","Chrzanów"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Pitbullu':", a: ["Marcin Dorociński","Cezary Pazura","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Polski żużlowiec, wielokrotny mistrz świata:", a: ["Tomasz Gollob","Adam Małysz","Kamil Stoch","Robert Lewandowski"], correct: 0 },
+  { q: "Największe jezioro woj. pomorskiego:", a: ["Jezioro Charzykowskie","Jezioro Dąbskie","Jezioro Kierskie","Jezioro Wdzydze"], correct: 0 },
+  { q: "Polski władca koronowany w 1501 r.:", a: ["Aleksander Jagiellończyk","Kazimierz Wielki","Władysław Jagiełło","Bolesław Chrobry"], correct: 0 },
+  { q: "Polski noblista, autor 'Rodzinnej Europy':", a: ["Czesław Miłosz","Henryk Sienkiewicz","Wisława Szymborska","Maria Skłodowska-Curie"], correct: 0 },
+  { q: "Najwyższa góra Beskidu Żywieckiego:", a: ["Babia Góra","Pilsko","Rysianka","Barania Góra"], correct: 0 },
+  { q: "Polski astronom, twórca obserwatorium w Gdańsku:", a: ["Jan Heweliusz","Mikołaj Kopernik","Tadeusz Banachiewicz","Kazimierz Kordylewski"], correct: 0 },
+  { q: "Największe miasto woj. łódzkiego (poza Łodzią):", a: ["Piotrków Trybunalski","Pabianice","Zgierz","Skierniewice"], correct: 0 },
+  { q: "Polski sportowiec, mistrz olimpijski w szermierce:", a: ["Jerzy Pawłowski","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Polski reżyser, twórca filmu 'Krótki film o miłości':", a: ["Krzysztof Kieślowski","Andrzej Wajda","Roman Polański","Jerzy Hoffman"], correct: 0 },
+  { q: "Największe miasto woj. podkarpackiego (poza Rzeszowem):", a: ["Przemyśl","Tarnobrzeg","Stalowa Wola","Mielec"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Czasie honoru':", a: ["Maciej Stuhr","Cezary Pazura","Borys Szyc","Marcin Dorociński"], correct: 0 },
+  { q: "Najdłuższa rzeka woj. mazowieckiego:", a: ["Wisła","Bug","Narew","Pilica"], correct: 0 },
+  { q: "Polski wódz, bohater powstania kościuszkowskiego:", a: ["Tadeusz Kościuszko","Józef Chłopicki","Jan III Sobieski","Kazimierz Pułaski"], correct: 0 },
+  { q: "Polski noblista literacki, autor 'Pianisty':", a: ["Władysław Reymont","Czesław Miłosz","Henryk Sienkiewicz","Wisława Szymborska"], correct: 0 },
+  { q: "Największe miasto woj. lubelskiego (poza Lublinem):", a: ["Chełm","Zamość","Puławy","Biała Podlaska"], correct: 0 },
+  { q: "Polski wynalazca pralki automatycznej:", a: ["Józef Hofmann","Kazimierz Prószyński","Ignacy Łukasiewicz","Henryk Magnuski"], correct: 0 },
+  { q: "Najwyższy szczyt Gór Kaczawskich:", a: ["Skopiec","Ślęża","Jagodna","Chełmiec"], correct: 0 },
+  { q: "Polski kompozytor, twórca 'Poloneza A-dur':", a: ["Fryderyk Chopin","Stanisław Moniuszko","Karol Szymanowski","Wojciech Kilar"], correct: 0 },
+  { q: "Polski władca koronowany w 1320 r.:", a: ["Władysław Łokietek","Kazimierz Wielki","Bolesław Chrobry","Mieszko I"], correct: 0 },
+  { q: "Największe miasto woj. pomorskiego (poza Gdańskiem i Gdynią):", a: ["Słupsk","Tczew","Wejherowo","Starogard Gdański"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Kilerze':", a: ["Cezary Pazura","Marcin Dorociński","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Polski sportowiec, mistrz olimpijski w wioślarstwie:", a: ["Mirosław Ziętarski","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Największe jezioro woj. wielkopolskiego:", a: ["Jezioro Gopło","Jezioro Powidzkie","Jezioro Lednica","Jezioro Malta"], correct: 0 },
+  { q: "Polski wynalazca lampy naftowej (poza Łukasiewiczem):", a: ["Jan Śniadecki","Kazimierz Prószyński","Michał Kalecki","Henryk Magnuski"], correct: 0 },
+  { q: "Najwyższa góra Gór Izerskich:", a: ["Wysoka Kopa","Smrk","Stóg Izerski","Śnieżne Kotły"], correct: 0 },
+  { q: "Polski reżyser, twórca filmu 'Popiół i diament':", a: ["Andrzej Wajda","Krzysztof Kieślowski","Roman Polański","Jerzy Hoffman"], correct: 0 },
+  { q: "Największe miasto woj. opolskiego (poza Opolem):", a: ["Kędzierzyn-Koźle","Nysa","Brzeg","Prószków"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Pitbullu. Niebezpieczne kobiety':", a: ["Marcin Dorociński","Cezary Pazura","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Polski wódz, dowódca wojsk w bitwie pod Grunwaldem:", a: ["Władysław Jagiełło","Kazimierz Wielki","Bolesław Chrobry","Tadeusz Kościuszko"], correct: 0 },
+  { q: "Polski noblista literacki, autor 'Ziemi obiecanej':", a: ["Władysław Reymont","Czesław Miłosz","Henryk Sienkiewicz","Wisława Szymborska"], correct: 0 },
+  { q: "Największe miasto woj. zachodniopomorskiego (poza Szczecinem):", a: ["Koszalin","Świnoujście","Kołobrzeg","Stargard"], correct: 0 },
+  { q: "Polski kompozytor XX w., autor 'Tryptyku rzymskiego':", a: ["Karol Szymanowski","Fryderyk Chopin","Stanisław Moniuszko","Wojciech Kilar"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Czasie honoru' (poza Stuhr):", a: ["Borys Szyc","Cezary Pazura","Marcin Dorociński","Maciej Stuhr"], correct: 0 },
+  { q: "Największe miasto woj. śląskiego (poza Katowicami i Częstochową):", a: ["Gliwice","Bytom","Zabrze","Rybnik"], correct: 0 },
+  { q: "Polski sportowiec, medalista w szermierce drużynowej:", a: ["Jerzy Pawłowski","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Najdłuższa rzeka woj. podkarpackiego:", a: ["San","Wisłok","Wisłoka","Sana"], correct: 0 },
+  { q: "Polski wynalazca, twórca aparatu fotograficznego:", a: ["Kazimierz Prószyński","Ignacy Łukasiewicz","Henryk Magnuski","Michał Kalecki"], correct: 0 },
+  { q: "Najwyższa góra Gór Świętokrzyskich (poza Łysicą):", a: ["Łysa Góra","Chełmowa Góra","Miejscowa Góra","Radostowa"], correct: 0 },
+  { q: "Polski wódz, dowódca wojsk w bitwie pod Racławicami:", a: ["Tadeusz Kościuszko","Józef Chłopicki","Jan III Sobieski","Kazimierz Pułaski"], correct: 0 },
+  { q: "Polski noblista, autor 'Dolina Issy':", a: ["Czesław Miłosz","Wisława Szymborska","Henryk Sienkiewicz","Maria Skłodowska-Curie"], correct: 0 },
+  { q: "Największe miasto woj. podlaskiego (poza Białymstokiem i Łomżą):", a: ["Suwałki","Hajnówka","Augustów","Bielsk Podlaski"], correct: 0 },
+  { q: "Najstarszy uniwersytet w Polsce:", a: ["Uniwersytet Jagielloński","Uniwersytet Warszawski","Uniwersytet Wrocławski","Uniwersytet Łódzki"], correct: 0 },
+  { q: "Polski malarz, autor 'Bitwy pod Grunwaldem':", a: ["Jan Matejko","Stanisław Wyspiański","Jacek Malczewski","Leon Wyczółkowski"], correct: 0 },
+  { q: "Największe miasto woj. świętokrzyskiego:", a: ["Kielce","Starachowice","Ostrowiec Świętokrzyski","Skarżysko-Kamienna"], correct: 0 },
+  { q: "Polski kompozytor operowy, twórca 'Halki':", a: ["Stanisław Moniuszko","Fryderyk Chopin","Karol Szymanowski","Wojciech Kilar"], correct: 0 },
+  { q: "Najdłuższa rzeka w Polsce:", a: ["Wisła","Odra","Warta","Bug"], correct: 0 },
+  { q: "Polski astronom, twórca heliocentrycznej teorii:", a: ["Mikołaj Kopernik","Jan Heweliusz","Tadeusz Banachiewicz","Kazimierz Kordylewski"], correct: 0 },
+  { q: "Najwyższy szczyt Tatr Wysokich:", a: ["Rysy","Gerlach","Kasprowy Wierch","Mięguszowiecki Szczyt"], correct: 0 },
+  { q: "Polski noblista, autorka 'Sól ziemi':", a: ["Wisława Szymborska","Czesław Miłosz","Henryk Sienkiewicz","Maria Skłodowska-Curie"], correct: 0 },
+  { q: "Największe miasto woj. warmińsko-mazurskiego:", a: ["Olsztyn","Elbląg","Ełk","Iława"], correct: 0 },
+  { q: "Polski reżyser, twórca 'Człowieka z marmuru':", a: ["Andrzej Wajda","Krzysztof Kieślowski","Roman Polański","Jerzy Hoffman"], correct: 0 },
+  { q: "Polski sportowiec, złoty medalista olimpijski w skokach narciarskich:", a: ["Kamil Stoch","Adam Małysz","Robert Lewandowski","Tomasz Gollob"], correct: 0 },
+  { q: "Największe jezioro woj. warmińsko-mazurskiego:", a: ["Śniardwy","Mamry","Niegocin","Jeziorak"], correct: 0 },
+  { q: "Polski wynalazca kinematografu:", a: ["Kazimierz Prószyński","Ignacy Łukasiewicz","Henryk Magnuski","Józef Hofmann"], correct: 0 },
+  { q: "Największe miasto woj. kujawsko-pomorskiego (poza Bydgoszczą i Toruniem):", a: ["Włocławek","Inowrocław","Grudziądz","Chełmno"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Kilerze' (poza Pazurą):", a: ["Cezary Pazura","Marcin Dorociński","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Polski wódz, dowódca wojsk w bitwie pod Wiedniem:", a: ["Jan III Sobieski","Tadeusz Kościuszko","Kazimierz Pułaski","Józef Poniatowski"], correct: 0 },
+  { q: "Polski noblista literacki, autor 'Chłopów':", a: ["Władysław Reymont","Czesław Miłosz","Henryk Sienkiewicz","Wisława Szymborska"], correct: 0 },
+  { q: "Największe miasto woj. lubuskiego (poza Zieloną Górą i Gorzowem):", a: ["Nowa Sól","Świebodzin","Żary","Międzyrzecz"], correct: 0 },
+  { q: "Polski kompozytor, twórca 'Hommage à Chopin':", a: ["Karol Szymanowski","Fryderyk Chopin","Stanisław Moniuszko","Wojciech Kilar"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Czasie honoru' (poza Stuhr i Szycem):", a: ["Marcin Dorociński","Cezary Pazura","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Największe miasto woj. podkarpackiego (poza Rzeszowem, Przemyślem i Tarnobrzegiem):", a: ["Stalowa Wola","Mielec","Krosno","Sanok"], correct: 0 },
+  { q: "Polski sportowiec, mistrz olimpijski w wioślarstwie drużynowym:", a: ["Mirosław Ziętarski","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Najwyższy szczyt Gór Słonnych:", a: ["Cergowa","Hyrlata","Wysoka","Lackowa"], correct: 0 },
+  { q: "Polski reżyser, twórca 'Człowieka z żelaza':", a: ["Andrzej Wajda","Krzysztof Kieślowski","Roman Polański","Jerzy Hoffman"], correct: 0 },
+  { q: "Największe miasto woj. lubelskiego (poza Lublinem, Chełmem i Zamościem):", a: ["Puławy","Biała Podlaska","Łęczna","Kraśnik"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Pitbullu. Nowe porządki':", a: ["Marcin Dorociński","Cezary Pazura","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Polski wódz, dowódca wojsk w insurekcji kościuszkowskiej:", a: ["Tadeusz Kościuszko","Józef Chłopicki","Jan III Sobieski","Kazimierz Pułaski"], correct: 0 },
+  { q: "Polski noblista, autor 'Zniewolonego umysłu':", a: ["Czesław Miłosz","Wisława Szymborska","Henryk Sienkiewicz","Maria Skłodowska-Curie"], correct: 0 },
+  { q: "Największe miasto woj. opolskiego (poza Opolem i Kędzierzynem-Koźlem):", a: ["Nysa","Brzeg","Prószków","Kluczbork"], correct: 0 },
+  { q: "Polski kompozytor XX w., twórca 'Concerto for Orchestra':", a: ["Wojciech Kilar","Fryderyk Chopin","Karol Szymanowski","Stanisław Moniuszko"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Czasie honoru' (poza Stuhr, Szycem i Dorocińskim):", a: ["Borys Szyc","Cezary Pazura","Marcin Dorociński","Maciej Stuhr"], correct: 0 },
+  { q: "Największe miasto woj. podlaskiego (poza Białymstokiem, Łomżą i Suwałkami):", a: ["Hajnówka","Augustów","Bielsk Podlaski","Siemiatycze"], correct: 0 },
+  { q: "Polski wynalazca, twórca automatu do pisania:", a: ["Kazimierz Prószyński","Ignacy Łukasiewicz","Henryk Magnuski","Józef Hofmann"], correct: 0 },
+  { q: "Najwyższy szczyt Gór Stołowych (poza Szczelińcem):", a: ["Radkowska Góra","Skalne Grzyby","Błędne Skały","Hejszowina"], correct: 0 },
+  { q: "Polski sportowiec, medalista olimpijski w kolarstwie:", a: ["Rafał Majka","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Największe jezioro woj. pomorskiego (poza Charzykowskim):", a: ["Jezioro Wdzydze","Jezioro Dąbskie","Jezioro Kierskie","Jezioro Żarnowieckie"], correct: 0 },
+  { q: "Polski reżyser, twórca 'Krótki film o zabijaniu':", a: ["Krzysztof Kieślowski","Andrzej Wajda","Roman Polański","Jerzy Hoffman"], correct: 0 },
+  { q: "Największe miasto woj. wielkopolskiego (poza Poznaniem):", a: ["Kalisz","Konin","Leszno","Gniezno"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Pitbullu' (poza Dorocińskim):", a: ["Cezary Pazura","Borys Szyc","Maciej Stuhr","Marcin Dorociński"], correct: 0 },
+  { q: "Polski wódz, bohater powstania listopadowego:", a: ["Józef Chłopicki","Tadeusz Kościuszko","Jan III Sobieski","Kazimierz Pułaski"], correct: 0 },
+  { q: "Polski noblista, autor 'Traktatu o manekinach':", a: ["Czesław Miłosz","Wisława Szymborska","Henryk Sienkiewicz","Maria Skłodowska-Curie"], correct: 0 },
+  { q: "Największe miasto woj. zachodniopomorskiego (poza Szczecinem i Koszalinem):", a: ["Świnoujście","Kołobrzeg","Stargard","Police"], correct: 0 },
+  { q: "Polski kompozytor, twórca 'Krzesany':", a: ["Karol Szymanowski","Fryderyk Chopin","Stanisław Moniuszko","Wojciech Kilar"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Czasie honoru' (ostatnia postać):", a: ["Borys Szyc","Cezary Pazura","Marcin Dorociński","Maciej Stuhr"], correct: 0 },
+  { q: "Największe miasto woj. śląskiego (poza Katowicami, Częstochową i Gliwicami):", a: ["Bytom","Zabrze","Rybnik","Tychy"], correct: 0 },
+  { q: "Polski sportowiec, medalista olimpijski w lekkoatletyce:", a: ["Irena Szewińska","Robert Lewandowski","Kamil Stoch","Adam Małysz"], correct: 0 },
+  { q: "Najdłuższa rzeka woj. lubelskiego:", a: ["Bug","Wieprz","Bystrzyca","Bystrzyca Łęczyńska"], correct: 0 },
+  { q: "Polski wynalazca, twórca radiotechniki:", a: ["Henryk Magnuski","Kazimierz Prószyński","Ignacy Łukasiewicz","Józef Hofmann"], correct: 0 },
+  { q: "Najwyższa góra Beskidu Niskiego:", a: ["Tarnica","Jaworzyna","Tokarnia","Wysoka"], correct: 0 },
+  { q: "Polski reżyser, twórca filmu 'Pan Tadeusz':", a: ["Andrzej Wajda","Krzysztof Kieślowski","Roman Polański","Jerzy Hoffman"], correct: 0 },
+  { q: "Największe miasto woj. pomorskiego (ostatnia opcja):", a: ["Starogard Gdański","Wejherowo","Tczew","Słupsk"], correct: 0 },
+  { q: "Polski aktor, twórca roli w 'Pitbullu' (ostatnia postać):", a: ["Marcin Dorociński","Cezary Pazura","Borys Szyc","Maciej Stuhr"], correct: 0 },
+  { q: "Polski wódz, dowódca wojsk w bitwie pod Maciejowicami:", a: ["Tadeusz Kościuszko","Józef Chłopicki","Jan III Sobieski","Kazimierz Pułaski"], correct: 0 },
+  { q: "Polski noblista, autor 'Rodziny Połanieckich':", a: ["Władysław Reymont","Czesław Miłosz","Henryk Sienkiewicz","Wisława Szymborska"], correct: 0 },
+  { q: "Największe miasto woj. łódzkiego (ostatnia opcja):", a: ["Piotrków Trybunalski","Pabianice","Zgierz","Skierniewice"], correct: 0 },
+  { q: "Najdłuższa rzeka w Polsce to:", a: ["Wisła", "Odra", "Warta", "Bug"], correct: 0 },
+  { q: "W którym roku Polska wstąpiła do Unii Europejskiej?", a: ["2004", "1999", "2000", "2007"], correct: 0 },
+  { q: "Stolicą województwa małopolskiego jest:", a: ["Kraków", "Katowice", "Rzeszów", "Nowy Sącz"], correct: 0 },
+  { q: "Polska graniczy z Niemcami na zachodzie – jak nazywa się rzeka będąca częścią tej granicy?", a: ["Odra", "Wisła", "Bug", "San"], correct: 0 },
+  { q: "Największe jezioro w Polsce to:", a: ["Śniardwy", "Mamry", "Hańcza", "Niegocin"], correct: 0 },
+  { q: "Pierwszym królem Polski był:", a: ["Bolesław Chrobry", "Mieszko I", "Kazimierz Wielki", "Zygmunt Stary"], correct: 0 },
+  { q: "W którym roku wybuchło Powstanie Warszawskie?", a: ["1944", "1939", "1945", "1943"], correct: 0 },
+  { q: "Najstarsze miasto w Polsce to:", a: ["Kalisz", "Poznań", "Gniezno", "Kraków"], correct: 0 },
+  { q: "Najwyższe polskie pasmo górskie to:", a: ["Tatry", "Beskidy", "Sudety", "Góry Świętokrzyskie"], correct: 0 },
+  { q: "Polski noblista, autor 'Quo Vadis' to:", a: ["Henryk Sienkiewicz", "Adam Mickiewicz", "Bolesław Prus", "Juliusz Słowacki"], correct: 0 },
+  { q: "Kto jest autorem hymnu Polski?", a: ["Józef Wybicki", "Adam Mickiewicz", "Ignacy Paderewski", "Juliusz Słowacki"], correct: 0 },
+  { q: "Z którego miasta pochodzi zespół Dżem?", a: ["Katowice", "Łódź", "Kraków", "Warszawa"], correct: 0 },
+  { q: "Polska waluta to:", a: ["Złoty", "Euro", "Korona", "Frank"], correct: 0 },
+  { q: "Największe polskie lotnisko znajduje się w:", a: ["Warszawie", "Krakowie", "Gdańsku", "Wrocławiu"], correct: 0 },
+  { q: "W którym roku Polska odzyskała niepodległość?", a: ["1918", "1920", "1939", "1945"], correct: 0 },
+  { q: "Najgłębsze jezioro w Polsce to:", a: ["Hańcza", "Śniardwy", "Mamry", "Niegocin"], correct: 0 },
+  { q: "Największe miasto na Śląsku to:", a: ["Katowice", "Gliwice", "Bytom", "Zabrze"], correct: 0 },
+  { q: "Z jakiego miasta pochodził Mikołaj Kopernik?", a: ["Toruń", "Gdańsk", "Kraków", "Frombork"], correct: 0 },
+  { q: "Polski port morski w województwie zachodniopomorskim to:", a: ["Szczecin", "Gdynia", "Hel", "Gdańsk"], correct: 0 },
+  { q: "Kto był pierwszym prezydentem III Rzeczypospolitej?", a: ["Lech Wałęsa", "Wojciech Jaruzelski", "Aleksander Kwaśniewski", "Bronisław Komorowski"], correct: 0 },
+  { q: "Jakie barwy ma flaga Polski?", a: ["Biało-czerwone", "Czerwono-białe", "Biało-niebieskie", "Czerwono-zielone"], correct: 0 },
+  { q: "W którym roku wprowadzono Konstytucję 3 maja?", a: ["1791", "1772", "1795", "1800"], correct: 0 },
+  { q: "Najstarszy uniwersytet w Polsce znajduje się w:", a: ["Krakowie", "Poznaniu", "Warszawie", "Lublinie"], correct: 0 },
+  { q: "Największy stadion w Polsce to:", a: ["Stadion Narodowy", "Stadion Śląski", "PGE Arena", "Stadion Wrocław"], correct: 0 },
+  { q: "Które morze oblewa Polskę?", a: ["Bałtyckie", "Północne", "Śródziemne", "Czarne"], correct: 0 },
+  { q: "W jakim mieście znajduje się Zamek Królewski na Wawelu?", a: ["Kraków", "Warszawa", "Poznań", "Malbork"], correct: 0 },
+  { q: "Jakie miasto było stolicą Polski przed Warszawą?", a: ["Kraków", "Gniezno", "Poznań", "Lublin"], correct: 0 },
+  { q: "Największy park narodowy w Polsce to:", a: ["Biebrzański", "Tatrzański", "Kampinoski", "Białowieski"], correct: 0 },
+  { q: "W jakim mieście odbywa się Festiwal Polskiej Piosenki?", a: ["Opole", "Sopot", "Kraków", "Warszawa"], correct: 0 },
+  { q: "Najwyższy budynek w Polsce to:", a: ["Varso Tower", "Pałac Kultury", "Sky Tower", "Złota 44"], correct: 0 },
+  { q: "Z jakiego miasta pochodził Jan Paweł II?", a: ["Wadowice", "Kraków", "Częstochowa", "Zakopane"], correct: 0 },
+  { q: "Na jakiej pustyni znajduje się Polska pustynia?", a: ["Błędowskiej", "Sahara", "Gobi", "Kalahari"], correct: 0 },
+  { q: "W jakim mieście znajduje się kopalnia soli wpisana na listę UNESCO?", a: ["Wieliczka", "Bochnia", "Katowice", "Bytom"], correct: 0 },
+  { q: "W którym roku Polska wstąpiła do NATO?", a: ["1999", "2004", "1995", "2000"], correct: 0 },
+  { q: "Jakie miasto jest znane z toruńskich pierników?", a: ["Toruń", "Lublin", "Kalisz", "Bydgoszcz"], correct: 0 },
+  { q: "Który polski sportowiec zdobył Złotą Piłkę?", a: ["Robert Lewandowski", "Kazimierz Deyna", "Grzegorz Lato", "Zbigniew Boniek"], correct: 0 },
+  { q: "W jakim województwie leży Zakopane?", a: ["Małopolskim", "Śląskim", "Podkarpackim", "Mazowieckim"], correct: 0 },
+  { q: "Co symbolizuje orzeł w godle Polski?", a: ["Siłę i wolność", "Pokój", "Bogactwo", "Miłość"], correct: 0 },
+  { q: "Które polskie miasto jest znane jako 'Miasto Kopernika'?", a: ["Toruń", "Olsztyn", "Gdańsk", "Elbląg"], correct: 0 },
+  { q: "Polska graniczy z Czechami na:", a: ["Południu", "Północy", "Wschodzie", "Zachodzie"], correct: 0 },
+  { q: "Kto był pierwszym premierem po 1989 roku?", a: ["Tadeusz Mazowiecki", "Lech Wałęsa", "Donald Tusk", "Jerzy Buzek"], correct: 0 },
+  { q: "Gdzie znajduje się Jasna Góra?", a: ["Częstochowa", "Kraków", "Lublin", "Warszawa"], correct: 0 },
+  { q: "Z jakiego materiału wykonano warszawską Syrenkę?", a: ["Brązu", "Kamienia", "Żelaza", "Marmuru"], correct: 0 },
+  { q: "Kto napisał 'Pan Tadeusz'?", a: ["Adam Mickiewicz", "Juliusz Słowacki", "Bolesław Prus", "Henryk Sienkiewicz"], correct: 0 },
+  { q: "Które miasto jest siedzibą Uniwersytetu Marii Curie-Skłodowskiej?", a: ["Lublin", "Warszawa", "Kraków", "Poznań"], correct: 0 },
+  { q: "Jakie zwierzę jest symbolem Puszczy Białowieskiej?", a: ["Żubr", "Łoś", "Niedźwiedź", "Wilk"], correct: 0 },
+  { q: "W którym mieście znajduje się Zamek Krzyżacki wpisany na listę UNESCO?", a: ["Malbork", "Toruń", "Olsztyn", "Elbląg"], correct: 0 },
+  { q: "Który polski zespół muzyczny śpiewał 'Autobiografię'?", a: ["Perfect", "Lady Pank", "Dżem", "Budka Suflera"], correct: 0 },
+  { q: "W jakim roku odbyły się pierwsze częściowo wolne wybory w Polsce?", a: ["1989", "1990", "1981", "1985"], correct: 0 },
+  { q: "Jaki region Polski słynie z oscypków?", a: ["Podhale", "Mazowsze", "Kujawy", "Warmia"], correct: 0 },
+  { q: "Najdłuższa rzeka w Polsce to:", a: ["Wisła", "Odra", "Warta", "Bug"], correct: 0 },
+  { q: "W którym roku Polska wstąpiła do Unii Europejskiej?", a: ["2004", "1999", "2000", "2007"], correct: 0 },
+  { q: "Stolicą województwa małopolskiego jest:", a: ["Kraków", "Katowice", "Rzeszów", "Nowy Sącz"], correct: 0 },
+  { q: "Który polski noblista napisał 'Lalkę'?", a: ["Bolesław Prus", "Henryk Sienkiewicz", "Adam Mickiewicz", "Juliusz Słowacki"], correct: 0 },
+  { q: "Największa wyspa Polski to:", a: ["Wolin", "Uznam", "Karsibór", "Słowiniec"], correct: 0 },
+  { q: "Które miasto jest znane z festiwalu filmowego Camerimage?", a: ["Toruń", "Łódź", "Warszawa", "Kraków"], correct: 1 },
+  { q: "Jak nazywa się najwyższy szczyt w Tatrach?", a: ["Rysy", "Gerlach", "Kasprowy Wierch", "Świnica"], correct: 0 },
+  { q: "Który polski astronom odkrył prawo heliocentryczne?", a: ["Mikołaj Kopernik", "Jan Heweliusz", "Nicolaus Steno", "Maria Skłodowska-Curie"], correct: 0 },
+  { q: "Jak nazywa się polska narodowa pieśń bożonarodzeniowa?", a: ["Bóg się rodzi", "Cicha noc", "Przybieżeli do Betlejem", "Dzisiaj w Betlejem"], correct: 0 },
+  { q: "Który polski reżyser zdobył Oscara za film 'Ida'?", a: ["Paweł Pawlikowski", "Andrzej Wajda", "Krzysztof Kieślowski", "Roman Polański"], correct: 0 },
+  { q: "Które polskie miasto jest znane z pierników?", a: ["Toruń", "Kraków", "Poznań", "Lublin"], correct: 0 },
+  { q: "W którym roku odbyła się Bitwa Warszawska?", a: ["1920", "1918", "1939", "1945"], correct: 0 },
+  { q: "Jak nazywa się polska płetwonurka i mistrzyni olimpijska?", a: ["Otylia Jędrzejczak", "Anna Rogowska", "Kamila Skolimowska", "Irena Szewińska"], correct: 0 },
+  { q: "Które polskie miasto jest stolicą województwa śląskiego?", a: ["Katowice", "Gliwice", "Bytom", "Zabrze"], correct: 0 },
+  { q: "Która polska rzeka wpada do Morza Bałtyckiego w Świnoujściu?", a: ["Odra", "Wisła", "Warta", "San"], correct: 0 },
+  { q: "Najstarsze miasto w Polsce to:", a: ["Kalisz", "Poznań", "Gniezno", "Kraków"], correct: 0 },
+  { q: "Który polski król był nazywany 'Wielkim'?", a: ["Kazimierz Wielki", "Bolesław Chrobry", "Zygmunt Stary", "Jan III Sobieski"], correct: 0 },
+  { q: "Jak nazywa się polska narodowa drużyna piłkarska?", a: ["Biało-czerwoni", "Orły", "Lwy", "Wilki"], correct: 0 },
+  { q: "Która polska uczelnia jest najstarsza?", a: ["Uniwersytet Jagielloński", "Uniwersytet Warszawski", "Uniwersytet Wrocławski", "Uniwersytet Adama Mickiewicza"], correct: 0 },
+  { q: "Który polski zamek jest wpisany na listę UNESCO?", a: ["Malbork", "Kraków", "Wawel", "Łańcut"], correct: 0 },
+  { q: "Która polska rzeka przepływa przez Warszawę?", a: ["Wisła", "Odra", "Warta", "San"], correct: 0 },
+  { q: "Który polski sportowiec zdobył najwięcej medali olimpijskich?", a: ["Irena Szewińska", "Robert Lewandowski", "Adam Małysz", "Justyna Kowalczyk"], correct: 0 },
+  { q: "Który polski kompozytor napisał 'Poloneza As-dur'?", a: ["Fryderyk Chopin", "Henryk Wieniawski", "Karol Szymanowski", "Stanisław Moniuszko"], correct: 0 },
+  { q: "Który polski film zdobył Oscara za najlepszy film dokumentalny?", a: ["Wszystko będzie dobrze", "Ida", "Katyń", "Cicha noc"], correct: 0 },
+  { q: "Który polski poeta napisał 'Pan Tadeusz'?", a: ["Adam Mickiewicz", "Juliusz Słowacki", "Henryk Sienkiewicz", "Bolesław Prus"], correct: 0 },
+  { q: "Jak nazywa się polska waluta?", a: ["Złoty", "Euro", "Dolar", "Frank"], correct: 0 },
+  { q: "Najwyższy szczyt w Polsce to:", a: ["Rysy", "Gerlach", "Kasprowy Wierch", "Świnica"], correct: 0 },
+  { q: "Który polski noblista zdobył literacką Nagrodę Nobla w 1996 roku?", a: ["Wisława Szymborska", "Czesław Miłosz", "Henryk Sienkiewicz", "Władysław Reymont"], correct: 0 },
+  { q: "Które polskie miasto słynie z festiwalu Opener?", a: ["Gdynia", "Warszawa", "Kraków", "Poznań"], correct: 0 },
+  { q: "Która polska góra jest symbolem Zakopanego?", a: ["Giewont", "Rysy", "Kasprowy Wierch", "Świnica"], correct: 0 },
+  { q: "Który polski teatr jest najstarszy?", a: ["Teatr Narodowy w Warszawie", "Teatr Polski w Krakowie", "Teatr Stary w Lublinie", "Teatr Wybrzeże w Gdańsku"], correct: 0 },
+  { q: "Jakie jest największe polskie miasto pod względem powierzchni?", a: ["Warszawa", "Kraków", "Łódź", "Wrocław"], correct: 0 },
+  { q: "Który polski lotniskowiec nosi imię generała Sikorskiego?", a: ["Żaden", "Błyskawica", "Orzeł", "Wicher"], correct: 0 },
+  { q: "Które polskie miasto słynie z produkcji ceramiki Bolesławiec?", a: ["Bolesławiec", "Kraków", "Wrocław", "Poznań"], correct: 0 },
+  { q: "Która polska wyspa leży na Bałtyku?", a: ["Wolin", "Uznam", "Hel", "Słowiniec"], correct: 0 },
+  { q: "Który polski sportowiec zdobył złoty medal w skokach narciarskich w 2010 roku?", a: ["Kamil Stoch", "Adam Małysz", "Piotr Żyła", "Dawid Kubacki"], correct: 0 },
+  { q: "Jak nazywa się największe polskie jezioro?", a: ["Śniardwy", "Mamry", "Hańcza", "Niegocin"], correct: 0 },
+  { q: "Który polski noblista był chemikiem?", a: ["Maria Skłodowska-Curie", "Henryk Sienkiewicz", "Czesław Miłosz", "Władysław Reymont"], correct: 0 },
+  { q: "Które polskie miasto jest znane jako 'Miasto Stu Mostów'?", a: ["Wrocław", "Kraków", "Gdańsk", "Poznań"], correct: 0 },
+  { q: "Który polski zespół śpiewał 'Windą do nieba'?", a: ["2+1", "Dżem", "Perfect", "Budka Suflera"], correct: 0 },
+  { q: "Które polskie miasto jest stolicą województwa podlaskiego?", a: ["Białystok", "Lublin", "Olsztyn", "Suwałki"], correct: 0 },
+  { q: "Jakie miasto jest stolicą Polski?", a: ["Kraków", "Warszawa", "Gdańsk", "Poznań"], correct: 1 },
+  { q: "Najdłuższa rzeka w Polsce to:", a: ["Odra", "Warta", "Wisła", "Bug"], correct: 2 },
+  { q: "Który polski noblista w dziedzinie literatury otrzymał nagrodę w 2018 roku?", a: ["Wisława Szymborska", "Olga Tokarczuk", "Henryk Sienkiewicz", "Czesław Miłosz"], correct: 1 },
+  { q: "Najwyższy szczyt w Polsce to:", a: ["Rysy", "Śnieżka", "Giewont", "Kasprowy Wierch"], correct: 0 },
+  { q: "Tradycyjny polski ser wędzony to:", a: ["Oscypek", "Feta", "Bryndza", "Gouda"], correct: 0 },
+  { q: "Kto napisał 'Pana Tadeusza'?", a: ["Adam Mickiewicz", "Juliusz Słowacki", "Henryk Sienkiewicz", "Bolesław Prus"], correct: 0 },
+  { q: "Największe jezioro w Polsce to:", a: ["Śniardwy", "Mamry", "Hańcza", "Niegocin"], correct: 0 },
+  { q: "Które miasto słynie z kopalni soli?", a: ["Wieliczka", "Kielce", "Tarnowskie Góry", "Bochnia"], correct: 0 },
+  { q: "Tradycyjny polski taniec narodowy to:", a: ["Polonez", "Mazur", "Krakowiak", "Oberek"], correct: 0 },
+  { q: "Który polski malarz namalował 'Bitwę pod Grunwaldem'?", a: ["Jan Matejko", "Jacek Malczewski", "Stanisław Wyspiański", "Olga Boznańska"], correct: 0 },
+  { q: "Jak nazywa się najstarszy uniwersytet w Polsce?", a: ["Uniwersytet Warszawski", "Uniwersytet Jagielloński", "Politechnika Wrocławska", "Uniwersytet Gdański"], correct: 1 },
+  { q: "Która rzeka przepływa przez Warszawę?", a: ["Wisła", "Odra", "Warta", "Bug"], correct: 0 },
+  { q: "Tradycyjna potrawa wigilijna to:", a: ["Pierogi z kapustą i grzybami", "Bigos", "Kiełbasa", "Schabowy"], correct: 0 },
+  { q: "Które miasto jest znane jako 'Perła Bałtyku'?", a: ["Sopot", "Gdańsk", "Gdynia", "Kołobrzeg"], correct: 0 },
+  { q: "Który polski sportowiec zdobył złoty medal w Londynie 2012?", a: ["Robert Lewandowski", "Tomasz Majewski", "Michał Kwiatkowski", "Adam Małysz"], correct: 1 },
+  { q: "Który polski zamek znajduje się na Wawelu?", a: ["Malbork", "Książ", "Wawel", "Ogrodzieniec"], correct: 2 },
+  { q: "Który polski kompozytor stworzył 'Poloneza As-dur'?", a: ["Fryderyk Chopin", "Stanisław Moniuszko", "Karol Szymanowski", "Henryk Wieniawski"], correct: 0 },
+  { q: "Jak nazywa się tradycyjna polska zupa rybna?", a: ["Żurek", "Barszcz", "Kapuśniak", "Rybna"], correct: 3 },
+  { q: "Które polskie miasto słynie z festiwalu filmowego?", a: ["Gdynia", "Warszawa", "Kraków", "Łódź"], correct: 0 },
+  { q: "Jaka jest tradycyjna polska maskotka olimpijska z 1980 roku?", a: ["Waldi", "Misiek", "Teddy", "Poldek"], correct: 0 },
+  { q: "Która polska góra jest znana z symbolu Krzyża?", a: ["Giewont", "Rysy", "Śnieżka", "Kasprowy Wierch"], correct: 0 },
+  { q: "Najstarsza polska uczelnia to:", a: ["Uniwersytet Warszawski", "Uniwersytet Jagielloński", "Politechnika Wrocławska", "Uniwersytet Gdański"], correct: 1 },
+  { q: "Która polska pisarka napisała 'Dom dzienny, dom nocny'?", a: ["Olga Tokarczuk", "Wisława Szymborska", "Maria Konopnicka", "Henryka Łazowertówna"], correct: 0 },
+  { q: "Który polski kierowca wygrał rajd Dakar?", a: ["Robert Kubica", "Krzysztof Hołowczyc", "Stanisław Czachor", "Jakub Przygoński"], correct: 3 },
+  { q: "Jaka polska wyspa leży na Bałtyku?", a: ["Wolin", "Hel", "Sobieszewo", "Uznam"], correct: 0 },
+  { q: "Który polski malarz jest autorem 'Autoportretu w kapeluszu'?", a: ["Jacek Malczewski", "Stanisław Wyspiański", "Olga Boznańska", "Jan Matejko"], correct: 0 },
+  { q: "Które miasto jest znane z zamku Krzyżackiego?", a: ["Malbork", "Torun", "Olsztyn", "Gdańsk"], correct: 0 },
+  { q: "Jak nazywa się tradycyjny polski napój z buraków?", a: ["Kompot", "Barszcz", "Kefir", "Mleko"], correct: 1 },
+  { q: "Który polski astronom odkrył komety i planetoidy?", a: ["Mikołaj Kopernik", "Maria Skłodowska-Curie", "Kazimierz Kordylewski", "Jan Heweliusz"], correct: 3 },
+  { q: "Które polskie miasto słynie z górniczej historii?", a: ["Katowice", "Gliwice", "Bytom", "Zabrze"], correct: 0 }
+];
+
+
+
+function getRandomSession(){ return QUESTIONS.map((q,i)=>({q,i})).sort(()=>Math.random()-0.5).slice(0,14).map(o=>o.i); }
+let sessionQuestions = getRandomSession();
+
+// Show question
+function showQuestion(){
+  if(current === 7){ showMidAd(); return; }
+  if(current >= sessionQuestions.length){ showVideoAd(); return; }
+
+  adTop.style.display='block';
+  adBottom.style.display='block';
+  videoAd.style.display='none';
+
+  const idx = sessionQuestions[current];
+  const q = QUESTIONS[idx];
+  questionEl.textContent = q.q;
+  answersEl.innerHTML="";
+
+  const shuffled = q.a.map((ans,i)=>({ans,i})).sort(()=>Math.random()-0.5);
+  shuffled.forEach(obj=>{
+    const b = document.createElement('div');
+    b.className='btn';
+    b.textContent=obj.ans;
+    b.onclick=()=>answer(obj.i, b, idx);
+    answersEl.appendChild(b);
+  });
+
+  progressEl.textContent=`Pytanie ${current+1}/${sessionQuestions.length}`;
+}
+
+function answer(idxAnswer, btn, questionIndex){
+  const correct = QUESTIONS[questionIndex].correct;
+  if(idxAnswer===correct){
+    btn.classList.add('good');
+    $('snd-ding').play();
+    points++;
+    fireworkAnswer();
+  } else {
+    btn.classList.add('bad');
+    $('snd-buzzer').play();
+  }
+  pointsEl.textContent=points;
+  current++;
+  setTimeout(showQuestion,400);
+}
+
+// Ads
+function showMidAd(){
+  adTop.style.display='none';
+  adBottom.style.display='none';
+  questionEl.textContent="Oglądaj reklamę, aby kontynuować";
+  answersEl.innerHTML = "";
+  videoAd.style.display='flex';
+  bg.volume = 0.1;
+
+  setTimeout(()=>{
+    videoAd.style.display='none';
+    bg.volume = 0.65;
+    current++;
+    showQuestion();
+  }, 15000);
+}
+
+function showVideoAd(){
+  adTop.style.display='none';
+  adBottom.style.display='none';
+  questionEl.textContent="Oglądaj reklamę, aby zobaczyć wynik";
+  answersEl.innerHTML="";
+  videoAd.style.display='flex';
+  bg.volume=0.1;
+
+  setTimeout(()=>{
+    videoAd.style.display='none';
+    bg.volume=0.65;
+    finishQuiz();
+  },15000);
+}
+
+// Finish quiz
+function finishQuiz(){
+  finalText.textContent=`${points} pkt`;
+  finalEl.style.display='flex';
+  fireworkFinal();
+}
+
+// Buttons
+$('retryBtn').onclick=()=>{ points=0; current=0; pointsEl.textContent='0'; sessionQuestions=getRandomSession(); finalEl.style.display='none'; showQuestion(); }
+$('shareBtn').onclick=()=>{ const url=location.href; const text='Zagraj w QuizProPL — sprawdź wiedzę o Polsce!'; if(navigator.share){navigator.share({title:'QuizProPL',text,url}).catch(()=>{});} else {navigator.clipboard?.writeText(url).then(()=>{ const msg=$('msgBox'); msg.textContent='Link skopiowany do schowka'; msg.style.display='block'; setTimeout(()=> msg.style.display='none',2000);}).catch(()=>{alert('Skopiuj link: '+url);});} }
+$('endBtn').onclick=()=>{ finalEl.style.display='none'; }
+
+// FIREWORKS
+function firework(realistic = false) {
+  const canvas = document.getElementById('fx');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const particles = [];
+  const colors = ['#ff3fc4','#00f0ff','#16d36a','#ffd27a','#ff5c6c','#ff8a00','#a020f0','#00ff90'];
+
+  const bursts = realistic ? 5 + Math.floor(Math.random()*5) : 3 + Math.floor(Math.random()*3);
+
+  for(let b=0;b<bursts;b++){
+    const centerX = Math.random()*canvas.width;
+    const centerY = realistic ? Math.random()*canvas.height/2 : Math.random()*canvas.height/3;
+    const numParticles = 25 + Math.floor(Math.random()*25);
+    for(let i=0;i<numParticles;i++){
+      const angle = Math.random()*2*Math.PI;
+      const speed = 2 + Math.random()*4;
+      particles.push({
+        x: centerX,
+        y: centerY,
+        vx: Math.cos(angle)*speed,
+        vy: Math.sin(angle)*speed,
+        alpha: 1,
+        color: colors[Math.floor(Math.random()*colors.length)],
+        radius: 2 + Math.random()*3,
+        decay: 0.015 + Math.random()*0.02
+      });
+    }
+  }
+
+  function draw(){
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      ctx.beginPath();
+      const grad = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.radius*3);
+      grad.addColorStop(0,p.color);
+      grad.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.arc(p.x,p.y,p.radius,0,Math.PI*2);
+      ctx.fill();
+
+      p.x += p.vx;
+      p.y += p.vy;
+      p.alpha -= p.decay;
+      p.vx *= 0.98;
+      p.vy += 0.05;
+
+      if(p.alpha <= 0) particles.splice(i,1);
+    }
+
+    if(particles.length>0) requestAnimationFrame(draw);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+
+  draw();
+}
+
+// po każdej poprawnej odpowiedzi
+function fireworkAnswer(){ firework(false); }
+
+// na końcu quizu
+function fireworkFinal(){ firework(true); }
+
+window.onload=showQuestion;
+</script>
+</body>
+</html>
